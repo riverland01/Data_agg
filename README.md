@@ -42,6 +42,22 @@ The package exposes these commands:
 - `snapshot-valuations --date YYYY-MM-DD`
 - `compute-signals --date YYYY-MM-DD`
 - `render-charts --date YYYY-MM-DD`
+- `export-universe-data --source ivv|spdr --output PATH`
+
+## Export Universe JSON
+
+You can create ready-to-use universe JSON files directly from the public holdings pages.
+
+Examples:
+
+```powershell
+$env:PYTHONPATH='D:\Repos\Data_agg\src'
+$python = 'D:\anaconda3\envs\data_science_torch_xgboost\python.exe'
+
+& $python -m data_agg export-universe-data --source ivv --output data\inputs\ivv_2026-04-20.json
+& $python -m data_agg export-universe-data --source spdr --output data\inputs\spdr_2026-04-20.json
+& $python -m data_agg export-universe-data --source spdr --spdr-symbols XLK XLF XLV --output data\inputs\spdr_subset_2026-04-20.json
+```
 
 ## Notes
 

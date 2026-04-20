@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .charts import ChartService
 from .config import load_registry
+from .holdings import HoldingsExporter
 from .models import ForwardPESnapshotRow
 from .signals import SignalService
 from .storage import create_store
@@ -45,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
     charts = subparsers.add_parser("render-charts")
     charts.add_argument("--date", required=True)
     charts.add_argument("--output-root", default="data/charts")
+
+    export = subparsers.add_parser("export-universe-data")
+    export.add_argument("--source", required=True, choices=["ivv", "spdr"])
+    export.add_argument("--output", required=True)
+    export.add_argument("--spdr-symbols", nargs="*", help="Optional subset of SPDR sector ETF symbols, e.g. XLK XLF XLV")
 
     return parser
 
@@ -104,6 +110,16 @@ def main() -> int:
 
     if args.command == "render-charts":
         output_path = ChartService(store).render_forward_pe_chart_pack(args.date, root=args.output_root)
+        print(str(output_path))
+        return 0
+
+    if args.command == "export-universe-data":
+        exporter = HoldingsExporter()
+        if args.source == "ivv":
+            url = registry["ivv_holdings"].primary.url
+            output_path = exporter.export_ivv(args.output, url=url)
+        else:
+            output_path = exporter.export_spdr(args.output, symbols=args.spdr_symbols)
         print(str(output_path))
         return 0
 

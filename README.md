@@ -49,10 +49,17 @@ The package exposes these commands:
 Start in PowerShell from the repo root:
 
 ```powershell
-cd D:\Repos\Data_agg
-$env:PYTHONPATH='D:\Repos\Data_agg\src'
-$python = 'D:\anaconda3\envs\data_science_torch_xgboost\python.exe'
+cd <path-to-repo>
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+$python = '<path-to-python.exe>'
 ```
+
+Examples:
+
+- `<path-to-repo>` might be `D:\Repos\Data_agg`
+- `<path-to-python.exe>` might be a system Python, a virtualenv Python, or a Conda environment Python
+
+If you are already using the right Python environment in your terminal, you can skip the `$python = ...` variable and replace `& $python` with `python`.
 
 ### Day 1 Workflow
 
@@ -77,9 +84,9 @@ On your very first run, there is no earlier baseline yet, so the diff output is 
 Once you have a universe file and valuation file, a fuller workflow looks like this:
 
 ```powershell
-cd D:\Repos\Data_agg
-$env:PYTHONPATH='D:\Repos\Data_agg\src'
-$python = 'D:\anaconda3\envs\data_science_torch_xgboost\python.exe'
+cd <path-to-repo>
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+$python = '<path-to-python.exe>'
 
 & $python -m data_agg export-universe-data --source ivv --output data\inputs\ivv_2026-04-20.json
 & $python -m data_agg refresh-universes --date 2026-04-20 --fixture data\inputs\ivv_2026-04-20.json
@@ -117,8 +124,8 @@ You can create ready-to-use universe JSON files directly from the public holding
 Examples:
 
 ```powershell
-$env:PYTHONPATH='D:\Repos\Data_agg\src'
-$python = 'D:\anaconda3\envs\data_science_torch_xgboost\python.exe'
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+$python = '<path-to-python.exe>'
 
 & $python -m data_agg export-universe-data --source ivv --output data\inputs\ivv_2026-04-20.json
 & $python -m data_agg export-universe-data --source spdr --output data\inputs\spdr_2026-04-20.json

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import unittest
+from unittest.mock import patch
 
 from data_agg.holdings import HoldingsExporter, HoldingsHtmlParser
 from tests.helpers import cleanup_test_dir, make_test_dir
@@ -30,6 +32,12 @@ SPDR_HTML = """
 </html>
 """
 
+ISHARES_CSV = """Fund Holdings as of,2026-04-20
+Ticker,Name,Sector,Weight (%)
+AAPL,Apple Inc.,Information Technology,7.10
+MSFT,Microsoft Corporation,Information Technology,6.90
+"""
+
 
 class FakeResponse:
     def __init__(self, text: str) -> None:
@@ -40,13 +48,16 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, mapping: dict[str, str]) -> None:
+    def __init__(self, mapping: dict[str, bytes | str]) -> None:
         self.mapping = mapping
 
     def get(self, url: str, headers=None, timeout: int = 30):  # noqa: ANN001
         if url not in self.mapping:
             raise AssertionError(f"unexpected URL: {url}")
-        return FakeResponse(self.mapping[url])
+        payload = self.mapping[url]
+        response = FakeResponse(payload if isinstance(payload, str) else "")
+        response.content = payload if isinstance(payload, bytes) else payload.encode("utf-8")
+        return response
 
 
 class HoldingsParserTests(unittest.TestCase):
@@ -83,12 +94,50 @@ class HoldingsExporterTests(unittest.TestCase):
         cleanup_test_dir(self.temp_dir)
 
     def test_exporter_writes_json_output(self) -> None:
-        exporter = HoldingsExporter(session=FakeSession({"https://example.com/ivv": IVV_HTML}))
+        download_url = (
+            "https://www.ishares.com/us/products/239726/"
+            "ishares-core-sp-500-etf/1467271812596.ajax?fileType=csv&fileName=IVV_holdings&dataType=fund"
+        )
+        exporter = HoldingsExporter(
+            session=FakeSession(
+                {
+                    download_url: ISHARES_CSV.encode("utf-8"),
+                    "https://example.com/ivv": IVV_HTML,
+                }
+            )
+        )
         output_path = exporter.export_ivv(self.temp_dir / "ivv.json", url="https://example.com/ivv")
 
         self.assertTrue(output_path.exists())
         payload = output_path.read_text(encoding="utf-8")
         self.assertIn("\"ticker\": \"AAPL\"", payload)
+        self.assertIn("\"issuer_name\": \"Apple Inc.\"", payload)
+
+    def test_parse_spdr_workbook(self) -> None:
+        class FakeSheet:
+            def iter_rows(self, values_only: bool = True):
+                return iter(
+                    [
+                        ("Ticker", "Company Name", "Weight", "Sector"),
+                        ("JPM", "JPMorgan Chase & Co.", 8.25, "Financials"),
+                        ("BAC", "Bank of America Corp", 6.50, "Financials"),
+                    ]
+                )
+
+        class FakeWorkbook:
+            active = FakeSheet()
+
+        exporter = HoldingsExporter(session=FakeSession({}))
+        with patch("data_agg.holdings.load_workbook", return_value=FakeWorkbook()):
+            holdings = exporter._parse_spdr_workbook(  # noqa: SLF001
+                b"fake-workbook",
+                source_url="https://example.com/xlf.xlsx",
+                symbol="XLF",
+            )
+
+        self.assertEqual(len(holdings), 2)
+        self.assertEqual(holdings[0].ticker, "JPM")
+        self.assertEqual(holdings[0].sector, "Financials")
 
 
 if __name__ == "__main__":

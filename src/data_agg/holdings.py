@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import csv
 import json
+from io import BytesIO, StringIO
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional
 
 import requests
 from bs4 import BeautifulSoup
+from openpyxl import load_workbook
 
 from .utils import coerce_float
 
@@ -18,6 +21,11 @@ DEFAULT_HEADERS = {
         "Chrome/124.0 Safari/537.36"
     )
 }
+
+ISHARES_DOWNLOAD_URL_TEMPLATE = (
+    "https://www.ishares.com/us/products/{product_id}/"
+    "ishares-{fund_slug}/1467271812596.ajax?fileType=csv&fileName={symbol}_holdings&dataType=fund"
+)
 
 SPDR_SECTOR_URLS = {
     "XLB": "https://www.ssga.com/us/en/intermediary/etfs/the-materials-select-sector-spdr-fund-xlb",
@@ -32,6 +40,11 @@ SPDR_SECTOR_URLS = {
     "XLV": "https://www.ssga.com/us/en/intermediary/etfs/the-health-care-select-sector-spdr-fund-xlv",
     "XLY": "https://www.ssga.com/us/en/intermediary/etfs/the-consumer-discretionary-select-sector-spdr-fund-xly",
 }
+
+SPDR_HOLDINGS_URL_TEMPLATES = [
+    "https://www.ssga.com/library-content/products/fund-data/etfs/us/holdings-daily-us-en-{symbol}.xlsx",
+    "https://www.ssga.com/us/en/intermediary/etfs/library-content/products/fund-data/etfs/us/holdings-daily-us-en-{symbol}.xlsx",
+]
 
 
 class HoldingsExportError(RuntimeError):
@@ -184,9 +197,35 @@ class HoldingsExporter:
         response.raise_for_status()
         return response.text
 
-    def export_ivv(self, output_path: str | Path, url: str) -> Path:
-        html = self.fetch_html(url)
-        holdings = self.parser.parse(html, source_url=url)
+    def fetch_bytes(self, url: str) -> bytes:
+        response = self.session.get(url, headers=DEFAULT_HEADERS, timeout=30)
+        response.raise_for_status()
+        return response.content
+
+    def export_ivv(
+        self,
+        output_path: str | Path,
+        url: str,
+        symbol: str = "IVV",
+        product_id: str = "239726",
+        fund_slug: str = "core-sp-500-etf",
+    ) -> Path:
+        download_url = ISHARES_DOWNLOAD_URL_TEMPLATE.format(
+            product_id=product_id,
+            fund_slug=fund_slug,
+            symbol=symbol,
+        )
+        holdings: list[NormalizedHolding]
+        try:
+            csv_bytes = self.fetch_bytes(download_url)
+            holdings = self._parse_ishares_csv(
+                csv_bytes,
+                source_url=download_url,
+                fallback_source_url=url,
+            )
+        except Exception:
+            html = self.fetch_html(url)
+            holdings = self.parser.parse(html, source_url=url)
         return self._write(output_path, holdings)
 
     def export_spdr(self, output_path: str | Path, symbols: Optional[Iterable[str]] = None) -> Path:
@@ -197,15 +236,146 @@ class HoldingsExporter:
             url = SPDR_SECTOR_URLS.get(upper_symbol)
             if not url:
                 raise HoldingsExportError(f"unsupported SPDR sector ETF symbol: {symbol}")
-            html = self.fetch_html(url)
-            parsed = self.parser.parse(
-                html,
-                source_url=url,
-                default_sector=upper_symbol,
-                etf_symbol=upper_symbol,
-            )
+            parsed = self._export_single_spdr_symbol(url=url, symbol=upper_symbol)
             holdings.extend(parsed)
         return self._write(output_path, holdings)
+
+    def _export_single_spdr_symbol(self, url: str, symbol: str) -> list[NormalizedHolding]:
+        for template in SPDR_HOLDINGS_URL_TEMPLATES:
+            download_url = template.format(symbol=symbol.lower())
+            try:
+                workbook_bytes = self.fetch_bytes(download_url)
+                parsed = self._parse_spdr_workbook(
+                    workbook_bytes,
+                    source_url=download_url,
+                    symbol=symbol,
+                )
+                if parsed:
+                    return parsed
+            except Exception:
+                continue
+
+        html = self.fetch_html(url)
+        return self.parser.parse(
+            html,
+            source_url=url,
+            default_sector=symbol,
+            etf_symbol=symbol,
+        )
+
+    def _parse_ishares_csv(
+        self,
+        csv_bytes: bytes,
+        source_url: str,
+        fallback_source_url: str,
+    ) -> list[NormalizedHolding]:
+        text = csv_bytes.decode("utf-8-sig", errors="replace")
+        rows = list(csv.reader(StringIO(text)))
+        header_row_index = None
+        for index, row in enumerate(rows):
+            normalized = [cell.strip().lower() for cell in row]
+            if "ticker" in normalized and "name" in normalized and "sector" in normalized:
+                header_row_index = index
+                break
+        if header_row_index is None:
+            raise HoldingsExportError(f"iShares holdings CSV header not found in {source_url}")
+
+        headers = [cell.strip() for cell in rows[header_row_index]]
+        mapping = {header.lower(): idx for idx, header in enumerate(headers)}
+        holdings: list[NormalizedHolding] = []
+        for row in rows[header_row_index + 1 :]:
+            if len(row) < len(headers):
+                continue
+            ticker = row[mapping["ticker"]].strip().upper()
+            issuer_name = row[mapping["name"]].strip()
+            if not ticker or not issuer_name:
+                continue
+            sector = row[mapping["sector"]].strip() if "sector" in mapping else None
+            weight = None
+            for candidate in ("weight (%)", "weight", "weight (%) "):
+                if candidate in mapping:
+                    weight = coerce_float(row[mapping[candidate]].replace("%", "").strip())
+                    break
+            cik = None
+            if "cusip" in mapping:
+                cik = None
+            holdings.append(
+                NormalizedHolding(
+                    ticker=ticker,
+                    issuer_name=issuer_name,
+                    sector=sector,
+                    weight=weight,
+                    cik=cik,
+                    source_url=fallback_source_url,
+                )
+            )
+        if not holdings:
+            raise HoldingsExportError(f"iShares holdings CSV contained no holdings rows from {source_url}")
+        return holdings
+
+    def _parse_spdr_workbook(
+        self,
+        workbook_bytes: bytes,
+        source_url: str,
+        symbol: str,
+    ) -> list[NormalizedHolding]:
+        workbook = load_workbook(filename=BytesIO(workbook_bytes), data_only=True, read_only=True)
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+        header_row_index = None
+        for index, row in enumerate(rows):
+            cells = [str(cell).strip().lower() if cell is not None else "" for cell in row]
+            if "ticker" in cells and any(name in cells for name in ("company name", "name", "security name")):
+                header_row_index = index
+                break
+        if header_row_index is None:
+            raise HoldingsExportError(f"SPDR holdings workbook header not found in {source_url}")
+
+        headers = [str(cell).strip() if cell is not None else "" for cell in rows[header_row_index]]
+        mapping = {header.lower(): idx for idx, header in enumerate(headers)}
+        name_key = next(
+            (candidate for candidate in ("company name", "name", "security name") if candidate in mapping),
+            None,
+        )
+        if name_key is None:
+            raise HoldingsExportError(f"SPDR holdings workbook name column not found in {source_url}")
+
+        holdings: list[NormalizedHolding] = []
+        for row in rows[header_row_index + 1 :]:
+            if not row or len(row) < len(headers):
+                continue
+            ticker = str(row[mapping["ticker"]] or "").strip().upper()
+            issuer_name = str(row[mapping[name_key]] or "").strip()
+            if not ticker or not issuer_name:
+                continue
+            weight = None
+            for candidate in ("weight", "index weight", "fund weight", "% weight"):
+                if candidate in mapping:
+                    raw = row[mapping[candidate]]
+                    if isinstance(raw, str):
+                        weight = coerce_float(raw.replace("%", "").strip())
+                    else:
+                        weight = coerce_float(raw)
+                    break
+            sector = None
+            for candidate in ("sector", "gics sector"):
+                if candidate in mapping:
+                    sector_value = row[mapping[candidate]]
+                    sector = str(sector_value).strip() if sector_value is not None else None
+                    break
+            holdings.append(
+                NormalizedHolding(
+                    ticker=ticker,
+                    issuer_name=issuer_name,
+                    sector=sector or symbol,
+                    weight=weight,
+                    source_url=source_url,
+                    etf_symbol=symbol,
+                )
+            )
+        if not holdings:
+            raise HoldingsExportError(f"SPDR holdings workbook contained no holdings rows from {source_url}")
+        return holdings
 
     def _write(self, output_path: str | Path, holdings: list[NormalizedHolding]) -> Path:
         path = Path(output_path)

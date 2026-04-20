@@ -1,0 +1,23 @@
+[
+  {
+    "ticker": "AAPL",
+    "cik": "0000320193",
+    "issuer_name": "Apple Inc.",
+    "sector": "Information Technology",
+    "weight": 7.10
+  },
+  {
+    "ticker": "MSFT",
+    "cik": "0000789019",
+    "issuer_name": "Microsoft Corporation",
+    "sector": "Information Technology",
+    "weight": 6.90
+  },
+  {
+    "ticker": "GOOGL",
+    "cik": "0001652044",
+    "issuer_name": "Alphabet Inc. Class A",
+    "sector": "Communication Services",
+    "weight": 4.20
+  }
+]

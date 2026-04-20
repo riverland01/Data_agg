@@ -1,0 +1,4 @@
+.tmp/
+.tmp_tests/
+__pycache__/
+*.py[cod]

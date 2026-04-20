@@ -1,0 +1,24 @@
+[
+  {
+    "member_id": "cik:0000320193",
+    "ticker": "AAPL",
+    "forward_eps": 8.5,
+    "forward_pe": 24.0,
+    "methodology_tag": "fixture"
+  },
+  {
+    "member_id": "cik:0000789019",
+    "ticker": "MSFT",
+    "forward_eps": 12.0,
+    "forward_pe": 29.0,
+    "methodology_tag": "fixture"
+  },
+  {
+    "member_id": "cik:0001326801",
+    "ticker": "META",
+    "forward_eps": null,
+    "forward_pe": null,
+    "null_reason": "missing_estimate",
+    "methodology_tag": "fixture"
+  }
+]

@@ -1,0 +1,148 @@
+{
+  "datasets": {
+    "ivv_holdings": {
+      "dataset_id": "ivv_holdings",
+      "description": "Current S&P 500 proxy universe from iShares IVV holdings.",
+      "staleness_tolerance_days": 3,
+      "required_columns": ["ticker", "issuer_name", "weight", "sector"],
+      "sources": {
+        "primary": {
+          "provider_id": "ishares_ivv",
+          "source_type": "structured_public",
+          "parser_type": "html_table",
+          "url": "https://www.ishares.com/us/products/239726/ishares-core-sp-500-etf",
+          "freshness_sla_hours": 30,
+          "stability_score": 0.8,
+          "constituent_defining": true,
+          "legal_notes": "Public holdings page; prefer downloadable holdings file when available."
+        },
+        "fallback_1": {
+          "provider_id": "wikipedia_sp500",
+          "source_type": "validation_only",
+          "parser_type": "html_table",
+          "url": "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+          "freshness_sla_hours": 48,
+          "stability_score": 0.45,
+          "constituent_defining": false,
+          "legal_notes": "Use as validation cross-check, not canonical membership source."
+        },
+        "fallback_2": {
+          "provider_id": "spdj_notices",
+          "source_type": "validation_only",
+          "parser_type": "html_table",
+          "url": "https://www.spglobal.com/spdji/en/indices/equity/sp-500/",
+          "freshness_sla_hours": 72,
+          "stability_score": 0.55,
+          "constituent_defining": false,
+          "legal_notes": "Use for change validation when holdings move."
+        },
+        "manual_recovery": {
+          "provider_id": "manual_csv",
+          "source_type": "manual_recovery",
+          "parser_type": "csv",
+          "url": "",
+          "freshness_sla_hours": 0,
+          "stability_score": 1.0,
+          "constituent_defining": true,
+          "legal_notes": "Operator-provided emergency seed."
+        }
+      }
+    },
+    "spdr_sector_etf_holdings": {
+      "dataset_id": "spdr_sector_etf_holdings",
+      "description": "Sector ETF proxy universes from State Street SPDR holdings pages.",
+      "staleness_tolerance_days": 3,
+      "required_columns": ["ticker", "issuer_name", "weight", "sector"],
+      "sources": {
+        "primary": {
+          "provider_id": "ssga_spdr",
+          "source_type": "structured_public",
+          "parser_type": "html_table",
+          "url": "https://www.ssga.com/us/en/intermediary/etfs/the-technology-select-sector-spdr-fund-xlk",
+          "freshness_sla_hours": 30,
+          "stability_score": 0.75,
+          "constituent_defining": true,
+          "legal_notes": "Public holdings page; daily holdings download preferred when available."
+        },
+        "fallback_1": {
+          "provider_id": "manual_csv",
+          "source_type": "manual_recovery",
+          "parser_type": "csv",
+          "url": "",
+          "freshness_sla_hours": 0,
+          "stability_score": 1.0,
+          "constituent_defining": true,
+          "legal_notes": "Operator-provided emergency seed."
+        },
+        "fallback_2": {
+          "provider_id": "none",
+          "source_type": "manual_recovery",
+          "parser_type": "json",
+          "url": "",
+          "freshness_sla_hours": 0,
+          "stability_score": 0.0,
+          "constituent_defining": false,
+          "legal_notes": "Reserved."
+        },
+        "manual_recovery": {
+          "provider_id": "manual_csv",
+          "source_type": "manual_recovery",
+          "parser_type": "csv",
+          "url": "",
+          "freshness_sla_hours": 0,
+          "stability_score": 1.0,
+          "constituent_defining": true,
+          "legal_notes": "Operator-provided emergency seed."
+        }
+      }
+    },
+    "forward_pe_snapshot": {
+      "dataset_id": "forward_pe_snapshot",
+      "description": "Current constituent-level forward P/E estimates with free-source fallbacks.",
+      "staleness_tolerance_days": 5,
+      "required_columns": ["ticker"],
+      "sources": {
+        "primary": {
+          "provider_id": "yahoo_finance",
+          "source_type": "unofficial_public",
+          "parser_type": "wrapper",
+          "url": "https://finance.yahoo.com/",
+          "freshness_sla_hours": 30,
+          "stability_score": 0.4,
+          "constituent_defining": false,
+          "legal_notes": "Use through isolated provider interface only."
+        },
+        "fallback_1": {
+          "provider_id": "alpha_vantage",
+          "source_type": "unofficial_public",
+          "parser_type": "json",
+          "url": "https://www.alphavantage.co/documentation/",
+          "freshness_sla_hours": 48,
+          "stability_score": 0.6,
+          "constituent_defining": false,
+          "legal_notes": "Optional keyed fallback."
+        },
+        "fallback_2": {
+          "provider_id": "carry_forward",
+          "source_type": "manual_recovery",
+          "parser_type": "json",
+          "url": "",
+          "freshness_sla_hours": 0,
+          "stability_score": 1.0,
+          "constituent_defining": false,
+          "legal_notes": "Use last accepted valuation snapshot with stale labeling."
+        },
+        "manual_recovery": {
+          "provider_id": "manual_csv",
+          "source_type": "manual_recovery",
+          "parser_type": "csv",
+          "url": "",
+          "freshness_sla_hours": 0,
+          "stability_score": 1.0,
+          "constituent_defining": false,
+          "legal_notes": "Operator-provided emergency valuation seed."
+        }
+      }
+    }
+  }
+}

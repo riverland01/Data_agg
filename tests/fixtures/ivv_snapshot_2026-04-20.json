@@ -1,0 +1,23 @@
+[
+  {
+    "ticker": "AAPL",
+    "cik": "0000320193",
+    "issuer_name": "Apple Inc.",
+    "sector": "Information Technology",
+    "weight": 7.00
+  },
+  {
+    "ticker": "MSFT",
+    "cik": "0000789019",
+    "issuer_name": "Microsoft Corporation",
+    "sector": "Communication Services",
+    "weight": 6.95
+  },
+  {
+    "ticker": "META",
+    "cik": "0001326801",
+    "issuer_name": "Meta Platforms, Inc.",
+    "sector": "Communication Services",
+    "weight": 3.10
+  }
+]

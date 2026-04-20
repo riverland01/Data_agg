@@ -36,8 +36,8 @@ class SignalService:
         broad = aggregates.get("__broad__")
         health = DatasetHealth.GREEN.value if broad and broad.forward_pe is not None else DatasetHealth.YELLOW.value
         payload = {
-            "broad": broad.__dict__ if broad else None,
-            "sectors": {key: value.__dict__ for key, value in aggregates.items() if key != "__broad__"},
+            "broad": broad.as_record() if broad else None,
+            "sectors": {key: value.as_record() for key, value in aggregates.items() if key != "__broad__"},
         }
         return SignalResult(
             signal_id="forward_pe_aggregate",

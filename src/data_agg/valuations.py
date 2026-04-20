@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Optional
 
 from .models import ChartManifest, ForwardPESnapshotRow
@@ -16,6 +16,9 @@ class AggregateForwardPE:
     uncovered_weight: float
     member_count: int
     covered_member_count: int
+
+    def as_record(self) -> dict:
+        return asdict(self)
 
 
 class ValuationService:

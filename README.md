@@ -44,6 +44,72 @@ The package exposes these commands:
 - `render-charts --date YYYY-MM-DD`
 - `export-universe-data --source ivv|spdr --output PATH`
 
+## Getting Started
+
+Start in PowerShell from the repo root:
+
+```powershell
+cd D:\Repos\Data_agg
+$env:PYTHONPATH='D:\Repos\Data_agg\src'
+$python = 'D:\anaconda3\envs\data_science_torch_xgboost\python.exe'
+```
+
+### Day 1 Workflow
+
+If this is your first run, use this sequence:
+
+```powershell
+& $python -m data_agg export-universe-data --source ivv --output data\inputs\ivv_2026-04-20.json
+& $python -m data_agg refresh-universes --date 2026-04-20 --fixture data\inputs\ivv_2026-04-20.json
+& $python -m data_agg diff-universes --date 2026-04-20
+```
+
+What each step does:
+
+- `export-universe-data`: fetches public holdings data and writes normalized JSON.
+- `refresh-universes`: loads that JSON into the pipeline as the accepted universe snapshot for the date.
+- `diff-universes`: compares the date's snapshot to the previous one.
+
+On your very first run, there is no earlier baseline yet, so the diff output is mostly a sanity check.
+
+### Full Example Run
+
+Once you have a universe file and valuation file, a fuller workflow looks like this:
+
+```powershell
+cd D:\Repos\Data_agg
+$env:PYTHONPATH='D:\Repos\Data_agg\src'
+$python = 'D:\anaconda3\envs\data_science_torch_xgboost\python.exe'
+
+& $python -m data_agg export-universe-data --source ivv --output data\inputs\ivv_2026-04-20.json
+& $python -m data_agg refresh-universes --date 2026-04-20 --fixture data\inputs\ivv_2026-04-20.json
+& $python -m data_agg diff-universes --date 2026-04-20
+& $python -m data_agg snapshot-valuations --date 2026-04-20 --fixture tests\fixtures\forward_pe_2026-04-20.json
+& $python -m data_agg compute-signals --date 2026-04-20
+& $python -m data_agg render-charts --date 2026-04-20
+```
+
+This sequence means:
+
+- create today’s IVV-based universe JSON,
+- load it into storage,
+- inspect membership changes,
+- load valuation data,
+- compute the aggregate forward P/E signal,
+- write chart-ready output.
+
+### Second Day And Later
+
+Tomorrow, run the same export and refresh steps again with the new date and output file:
+
+```powershell
+& $python -m data_agg export-universe-data --source ivv --output data\inputs\ivv_2026-04-21.json
+& $python -m data_agg refresh-universes --date 2026-04-21 --fixture data\inputs\ivv_2026-04-21.json
+& $python -m data_agg diff-universes --date 2026-04-21
+```
+
+That is when the point-in-time universe tracking becomes useful, because the pipeline can compare today's membership to yesterday's accepted snapshot.
+
 ## Export Universe JSON
 
 You can create ready-to-use universe JSON files directly from the public holdings pages.
@@ -58,6 +124,8 @@ $python = 'D:\anaconda3\envs\data_science_torch_xgboost\python.exe'
 & $python -m data_agg export-universe-data --source spdr --output data\inputs\spdr_2026-04-20.json
 & $python -m data_agg export-universe-data --source spdr --spdr-symbols XLK XLF XLV --output data\inputs\spdr_subset_2026-04-20.json
 ```
+
+The output JSON is in the same shape expected by `refresh-universes`, so you can pass it directly into the next step.
 
 ## Notes
 

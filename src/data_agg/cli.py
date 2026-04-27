@@ -13,6 +13,9 @@ from .storage import create_store
 from .universe import FailingAdapter, StaticRowsAdapter, UniverseService
 
 
+DEFAULT_UNIVERSE_DATASET = "ivv_holdings"
+
+
 def _load_fixture_rows(path: str | None) -> list[dict]:
     if not path:
         return []
@@ -22,6 +25,31 @@ def _load_fixture_rows(path: str | None) -> list[dict]:
     return json.loads(file_path.read_text(encoding="utf-8"))
 
 
+def _infer_universe_dataset(rows: list[dict]) -> str | None:
+    if not rows:
+        return None
+
+    etf_symbols = {str(row.get("etf_symbol") or "").upper() for row in rows}
+    etf_symbols.discard("")
+    if etf_symbols:
+        return "spdr_sector_etf_holdings"
+
+    source_urls = {str(row.get("source_url") or "").lower() for row in rows}
+    if any("ssga.com" in url for url in source_urls):
+        return "spdr_sector_etf_holdings"
+    if any("ishares.com" in url for url in source_urls):
+        return "ivv_holdings"
+
+    return None
+
+
+def _resolve_refresh_dataset(dataset: str, fixture_rows: list[dict]) -> str:
+    inferred = _infer_universe_dataset(fixture_rows)
+    if dataset != DEFAULT_UNIVERSE_DATASET:
+        return dataset
+    return inferred or dataset
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="data-agg")
     parser.add_argument("--root", default="data/state", help="Storage root")
@@ -29,7 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     refresh = subparsers.add_parser("refresh-universes")
     refresh.add_argument("--date", required=True)
-    refresh.add_argument("--dataset", default="ivv_holdings")
+    refresh.add_argument(
+        "--dataset",
+        default=DEFAULT_UNIVERSE_DATASET,
+        help="Universe dataset id. Defaults to ivv_holdings, but fixture rows can auto-switch this for SPDR exports.",
+    )
     refresh.add_argument("--fixture", help="Optional JSON fixture for manual recovery")
 
     diff = subparsers.add_parser("diff-universes")
@@ -62,8 +94,9 @@ def main() -> int:
     registry = load_registry()
 
     if args.command == "refresh-universes":
-        bundle = registry[args.dataset]
         fixture_rows = _load_fixture_rows(args.fixture)
+        resolved_dataset = _resolve_refresh_dataset(args.dataset, fixture_rows)
+        bundle = registry[resolved_dataset]
         adapters = {
             "primary": FailingAdapter(bundle.primary) if not fixture_rows else StaticRowsAdapter(bundle.primary, fixture_rows),
             "fallback_1": FailingAdapter(bundle.fallback_1),
